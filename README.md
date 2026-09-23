@@ -130,6 +130,7 @@ Use `config/claude_desktop_config.json` (merge it into your client's MCP config)
 
 | Tool | Purpose |
 | --- | --- |
+| `comfyui_help` | **Read this first** — usage guide + the golden rules (media is returned inline; don't call ComfyUI directly) |
 | `comfyui_system_info` | Version, OS, RAM, GPU/VRAM devices |
 | `comfyui_queue` | Currently running + pending jobs |
 | `comfyui_list_models` | Installed models, optionally filtered by type |
@@ -140,9 +141,9 @@ Use `config/claude_desktop_config.json` (merge it into your client's MCP config)
 | `comfyui_free` | Free model memory (weights + VRAM) to make room |
 | `comfyui_queue_prompt` | Queue an arbitrary workflow (API-format graph), no waiting |
 | `comfyui_wait_for_completion` | Block until a queued prompt finishes |
-| `comfyui_get_image` | Fetch a produced image from `/view` as image content |
+| `comfyui_get_image` | Re-fetch a produced image by filename → returns it inline + its `/view` URL |
 | `comfyui_get_audio` | Fetch a produced audio file as audio content + URL |
-| `comfyui_generate_image` | One-shot image generation (FLUX or SDXL) → returns the image |
+| `comfyui_generate_image` | One-shot image generation (default FLUX.1 dev) → returns the image inline + filename/URL |
 | `comfyui_generate_music` | One-shot music generation (ACE-Step 1.5 / Sonilo / Stable Audio) → returns audio |
 
 ### Music generation tips
@@ -176,6 +177,12 @@ Use `config/claude_desktop_config.json` (merge it into your client's MCP config)
 - **Image generation is verified** end-to-end through the Docker container: `comfyui_generate_image`
   defaults to **FLUX.1 dev** and returns a valid PNG (e.g. 1024×1024) over
   `http://localhost:8000/mcp`.
+- **How an LLM/harness is guided:** the server ships a top-level `instructions`
+  block (delivered to the client at `initialize`) carrying the golden rules, and each
+  tool has a self-sufficient description. `comfyui_help` returns the same guide on demand.
+  The key rule: `comfyui_generate_image` / `comfyui_generate_music` return the media
+  **inline** — save it by base64-decoding the block, and **never** call ComfyUI's HTTP API
+  or open its `/view` URLs directly (they're only reachable through this MCP).
 - **ACE-Step 1.5 needs a matching ComfyUI:** the `CLIPLoader` `type="ace"` in your ComfyUI must
   match the installed text encoder's vocabulary. If a music job fails at `CLIPLoader` with
   "size mismatch for model.embed_tokens.weight", your ComfyUI's `ace` type (base Qwen3, vocab

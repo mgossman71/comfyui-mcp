@@ -37,7 +37,24 @@ HOST = os.environ.get("MCP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MCP_PORT", "8000"))
 STATELESS = os.environ.get("MCP_STATELESS", "false").lower() in ("1", "true", "yes")
 
-mcp = FastMCP("comfyui", host=HOST, port=PORT, stateless_http=STATELESS)
+INSTRUCTIONS = """\
+ComfyUI MCP -- drives a ComfyUI server for image and music generation.
+
+Golden rules (read once):
+- Generate with `comfyui_generate_image` / `comfyui_generate_music`. These
+  RETURN the finished media INLINE in the response (an image block / audio
+  block). You already have the media -- do NOT make a second call to fetch it.
+- To save media to disk, base64-DECODE the returned block and write the bytes.
+- NEVER call the ComfyUI HTTP API or open its URLs (e.g. `/view`) yourself:
+  that server is on a private network only this MCP can reach, so direct
+  requests from you will fail.
+- Pick models by NAME via the `model` parameter (image: `flux1-dev` default;
+  audio: `acestep-turbo` default). Call `comfyui_list_presets` to see options.
+- To re-fetch a previously generated file, use `comfyui_get_image` /
+  `comfyui_get_audio` with the exact `filename` from an earlier result.
+"""
+
+mcp = FastMCP("comfyui", instructions=INSTRUCTIONS, host=HOST, port=PORT, stateless_http=STATELESS)
 
 _client: Optional[ComfyUIClient] = None
 
@@ -88,7 +105,11 @@ def _mime(filename: str, default: str) -> str:
 
 def _image_block(c: ComfyUIClient, item: dict[str, str]) -> list:
     b64 = c.view_base64(item["filename"], item["subfolder"], item["type"])
-    return [ImageContent(type="image", data=b64, mimeType=_mime(item["filename"], "image/png"))]
+    url = c.view_url(item["filename"], item["subfolder"], item["type"])
+    return [
+        TextContent(type="text", text=f"Image file: {item['filename']}\nURL: {url}"),
+        ImageContent(type="image", data=b64, mimeType=_mime(item["filename"], "image/png")),
+    ]
 
 
 def _audio_block(c: ComfyUIClient, item: dict[str, str]) -> list:
@@ -113,6 +134,18 @@ def job_error(entry: Any) -> Optional[str]:
             detail = payload.get("exception_message") or payload.get("exception_type") or ""
             return f"[{node}] {detail}".strip()[:800]
     return f"status: {status.get('status_str')}"
+
+
+# --------------------------------------------------------------------------- #
+# Help
+# --------------------------------------------------------------------------- #
+@mcp.tool()
+def comfyui_help() -> str:
+    """How to use this server -- READ THIS FIRST. Explains the tools and the
+    golden rule that comfyui_generate_image / comfyui_generate_music return the
+    media INLINE (to save it, base64-decode the block; never call the ComfyUI
+    HTTP API or open its /view URLs yourself)."""
+    return INSTRUCTIONS
 
 
 # --------------------------------------------------------------------------- #
@@ -310,12 +343,14 @@ def comfyui_wait_for_completion(prompt_id: str, timeout_seconds: Optional[float]
 
 @mcp.tool()
 def comfyui_get_image(filename: str, subfolder: str = "", image_type: str = "output") -> list:
-    """Fetch a specific image output from ComfyUI and return it as viewable
-    image content."""
+    """Fetch a previously generated image by its exact filename and return it
+    INLINE as an image block (plus its filename and /view URL). Get the
+    filename from an earlier generate_image/get_image result. Do NOT open the
+    /view URL yourself -- call this tool instead."""
     c = client()
     try:
         block = _image_block(c, {"filename": filename, "subfolder": subfolder, "type": image_type})
-        return [TextContent(type="text", text=f"Image: {filename}")] + block
+        return block
     except ComfyUIError as e:
         return _err(e)
 
@@ -349,10 +384,15 @@ def comfyui_generate_image(
     seed: Optional[int] = None,
     model_type: str = "auto",
 ) -> list:
-    """Generate an image and return it.
+    """Generate an image and return it INLINE in this response as an image
+    block -- the whole job (queue, wait, fetch) happens in this one call, so do
+    NOT make a follow-up call to retrieve it. To save the image, base64-decode
+    the returned block and write the bytes; do NOT call ComfyUI's /view URL
+    yourself (that server is only reachable through this MCP). The response also
+    includes the saved filename and its /view URL.
 
-    Pick a model by name via `model` (see comfyui_list_presets) -- defaults to
-    FLUX.1 dev -- or pass a raw `checkpoint` file to override it.
+    Pick the model by name via `model` (see comfyui_list_presets) -- defaults to
+    FLUX.1 dev -- or pass a raw `checkpoint` file to override.
     model_type: 'auto' (detect FLUX/SDXL from the name), 'sdxl', or 'flux'.
     """
     c = client()
@@ -402,7 +442,8 @@ def comfyui_generate_image(
     out: list = [
         TextContent(
             type="text",
-            text=f"Generated image (seed={sd}, {'flux' if is_flux else 'sdxl'}, {steps} steps). "
+            text=f"Generated image (seed={sd}, {'flux' if is_flux else 'sdxl'}, {steps} steps) "
+            f"-- returned inline below; base64-decode the image block to save it. "
             f"{len(media['images'])} image(s).",
         )
     ]
@@ -428,12 +469,16 @@ def comfyui_generate_music(
     seed: Optional[int] = None,
     filename_prefix: str = "music/ComfyUI",
 ) -> list:
-    """Generate music and return it.
+    """Generate music and return it INLINE in this response as an audio block
+    plus its /view URL -- the whole job happens in this one call, so do NOT make
+    a follow-up call to fetch it. To save it, base64-decode the returned audio
+    block; you can also hand the /view URL to the user (you can't play it back,
+    but they can open it).
 
     Pick an audio model by name via `model` (see comfyui_list_presets) -- defaults
     to ACE-Step 1.5 turbo -- or pass `engine` ('acestep15'/'sonilo'/'stable_audio')
     to choose a pipeline directly. For ACE-Step put genre/style in `tags` and song
-    text in `lyrics`. Returns the audio as a base64 block plus its /view URL.
+    text in `lyrics`.
     """
     c = client()
     sd = workflows.resolve_seed(seed)
@@ -473,7 +518,8 @@ def comfyui_generate_music(
         return [TextContent(type="text", text=f"Music generation failed: {err}")]
     media = extract_media(entry)
     out: list = [
-        TextContent(type="text", text=f"Generated music via {engine} (seed={sd}, {duration_seconds}s). {len(media['audio'])} audio file(s).")
+        TextContent(type="text", text=f"Generated music via {engine} (seed={sd}, {duration_seconds}s) "
+                                      f"-- returned inline below; base64-decode the audio block to save it. {len(media['audio'])} audio file(s).")
     ]
     for a in media["audio"]:
         try:

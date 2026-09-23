@@ -1,7 +1,7 @@
 # ComfyUI-MCP — Checkpoint / Handoff
 
 > Living document. Update after every meaningful step so any agent can resume.
-> Last updated: 2026-09-23 (added named model presets: image default now FLUX.1 dev, audio default ACE-Step turbo; FLUX.1 dev image verified through Docker; ACE-Step 1.5 text encoders confirmed incompatible with current ComfyUI)
+> Last updated: 2026-09-23 (made the MCP self-describing: server `instructions`, self-sufficient tool docs, image responses now carry filename+URL, added `comfyui_help`; all verified end-to-end)
 
 ## Mission
 Build a **full-featured MCP server** (Python, official `mcp` SDK; stdio **or** streamable-http)
@@ -53,6 +53,7 @@ the model (images as base64 `image` content; audio as saved filename + view URL)
 - [x] 15. Add `job_error()` so failed jobs surface the real ComfyUI error (e.g. CLIPLoader load failure) instead of "no output found".
 - [x] 16. Named model presets (`comfyui_mcp/presets.py`): `model=` selector on generate_image/generate_music + new `comfyui_list_presets` tool. Image default -> flux1-dev.
 - [x] 17. Verify FLUX.1 dev default image gen end-to-end through Docker (1024x1024 PNG OK); confirmed all ACE-Step 1.5 text encoders are incompatible with the current ComfyUI.
+- [x] 18. Self-describing MCP (fixes "harness can't figure out how to use it"): server `instructions` delivered at `initialize`; rewrote generate/get tool docs; `_image_block` now returns filename+`/view` URL (was image-only); added `comfyui_help` tool (15 tools total). Verified: instructions delivered over stdio + streamable-http, image response includes filename/URL.
 
 NOTE: installed `mcp` 2.x by accident first (breaks FastMCP API); pinned `mcp>=1.10,<2`
 -> 1.30.0. requirements.txt already reflects this.
