@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "comfyui": {
+      "command": "/Users/markgossman/Documents/GITHUB/ComfyUI-MCP/.venv/bin/python",
+      "args": ["-m", "comfyui_mcp.server"],
+      "cwd": "/Users/markgossman/Documents/GITHUB/ComfyUI-MCP",
+      "env": {
+        "COMFYUI_URL": "http://10.0.54.157:8188"
+      }
+    }
+  }
+}

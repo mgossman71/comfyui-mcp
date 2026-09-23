@@ -1,0 +1,20 @@
+# Keep the Docker build context small -- the virtualenv is NOT reused in the
+# image (the Dockerfile installs requirements.txt directly into the image).
+.venv/
+.venv
+__pycache__/
+*.pyc
+*.pyo
+
+# Repo / docs / tooling that the container does not need.
+.git/
+.gitignore
+config/
+smoke_test.py
+checkpoint.md
+*.md
+
+# Docker files themselves.
+Dockerfile
+docker-compose.yml
+.dockerignore

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Generated media (test outputs)
+*.png
+*.jpg
+*.mp3
+*.wav
+*.safetensors
+
+# OS
+.DS_Store

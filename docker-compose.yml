@@ -1,0 +1,29 @@
+services:
+  comfyui-mcp:
+    build: .
+    image: comfyui-mcp
+    container_name: comfyui-mcp
+    ports:
+      - "8000:8000"            # host:container -> MCP endpoint at http://localhost:8000/mcp
+    environment:
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+      # --- ComfyUI connection -------------------------------------------- #
+      # ComfyUI on this LAN (default for the current setup):
+      COMFYUI_URL: "http://10.0.54.157:8188"
+      # If ComfyUI runs on the Docker *host* instead, use one of these:
+      #   COMFYUI_URL: "http://host.docker.internal:8188"
+      COMFYUI_TIMEOUT: "120"
+      COMFYUI_WAIT_TIMEOUT: "900"
+    # Lets the container resolve host.docker.internal (required on Linux;
+    # macOS/Windows Docker Desktop provide it automatically).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 10s
